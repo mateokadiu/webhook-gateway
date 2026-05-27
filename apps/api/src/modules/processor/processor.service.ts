@@ -5,7 +5,7 @@ import { DrizzleService } from '../../common/drizzle/drizzle.service.js';
 import { deliveries, events, routes, sources, targets } from '../../drizzle/schema.js';
 import { EVENTS_QUEUE, REDIS_OPTIONS } from '../../common/queue/queue.module.js';
 import { DeliveryClient } from './delivery.client.js';
-import { evaluateRules, type RouteRules } from '../routes/rules.js';
+import { dispatch } from '../routes/select.js';
 
 export const DELIVERIES_QUEUE_NAME = 'deliveries';
 
@@ -83,31 +83,27 @@ export class ProcessorService {
       .where(
         sql`${routes.sourceId} = ${event.sourceId} AND ${routes.targetId} = ANY(${targetIds}::uuid[])`,
       );
-    const routeByTarget = new Map(routeRows.map((r) => [r.targetId, r]));
 
     // Apply per-route filter rules.
-    const passing: typeof targetRows = [];
-    for (const t of targetRows) {
-      const route = routeByTarget.get(t.id);
-      if (route && route.enabled === false) {
-        this.log.debug({ eventId, targetId: t.id }, 'processEvent: route disabled');
-        continue;
-      }
-      const rules = (route?.rules ?? null) as RouteRules | null;
-      const decision = evaluateRules(rules, {
+    const decisions = dispatch(
+      targetRows.map((t) => ({ id: t.id })),
+      routeRows.map((r) => ({ targetId: r.targetId, enabled: r.enabled, rules: r.rules })),
+      {
         topic: event.topic,
         headers: event.headers as Record<string, unknown>,
         body: event.body,
-      });
-      if (!decision.forward) {
+      },
+    );
+    const passingIds = new Set(decisions.filter((d) => d.forward).map((d) => d.target.id));
+    for (const d of decisions) {
+      if (!d.forward) {
         this.log.debug(
-          { eventId, targetId: t.id, reason: decision.reason },
+          { eventId, targetId: d.target.id, reason: d.reason, detail: d.detail },
           'processEvent: filter-skip',
         );
-        continue;
       }
-      passing.push(t);
     }
+    const passing = targetRows.filter((t) => passingIds.has(t.id));
 
     if (passing.length === 0) {
       await this.drizzle.db
