@@ -2,9 +2,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Queue, type ConnectionOptions } from 'bullmq';
 import { and, eq, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../common/drizzle/drizzle.service.js';
-import { deliveries, events, sources, targets } from '../../drizzle/schema.js';
+import { deliveries, events, routes, sources, targets } from '../../drizzle/schema.js';
 import { EVENTS_QUEUE, REDIS_OPTIONS } from '../../common/queue/queue.module.js';
 import { DeliveryClient } from './delivery.client.js';
+import { evaluateRules, type RouteRules } from '../routes/rules.js';
 
 export const DELIVERIES_QUEUE_NAME = 'deliveries';
 
@@ -69,21 +70,62 @@ export class ProcessorService {
       return;
     }
 
-    await this.drizzle.db
-      .update(events)
-      .set({ status: 'processing', fanOut: targetIds.length })
-      .where(eq(events.id, eventId));
-
     // Filter to enabled targets — disabled targets get no delivery row, just like Hookdeck.
     const targetRows = await this.drizzle.db
       .select()
       .from(targets)
       .where(sql`${targets.id} = ANY(${targetIds}::uuid[]) AND ${targets.enabled} = true`);
 
+    // Look up per-pair routes. Missing route ⇒ default (no filter, no transform).
+    const routeRows = await this.drizzle.db
+      .select()
+      .from(routes)
+      .where(
+        sql`${routes.sourceId} = ${event.sourceId} AND ${routes.targetId} = ANY(${targetIds}::uuid[])`,
+      );
+    const routeByTarget = new Map(routeRows.map((r) => [r.targetId, r]));
+
+    // Apply per-route filter rules.
+    const passing: typeof targetRows = [];
+    for (const t of targetRows) {
+      const route = routeByTarget.get(t.id);
+      if (route && route.enabled === false) {
+        this.log.debug({ eventId, targetId: t.id }, 'processEvent: route disabled');
+        continue;
+      }
+      const rules = (route?.rules ?? null) as RouteRules | null;
+      const decision = evaluateRules(rules, {
+        topic: event.topic,
+        headers: event.headers as Record<string, unknown>,
+        body: event.body,
+      });
+      if (!decision.forward) {
+        this.log.debug(
+          { eventId, targetId: t.id, reason: decision.reason },
+          'processEvent: filter-skip',
+        );
+        continue;
+      }
+      passing.push(t);
+    }
+
+    if (passing.length === 0) {
+      await this.drizzle.db
+        .update(events)
+        .set({ status: 'ok', fanOut: 0, completedAt: new Date() })
+        .where(eq(events.id, eventId));
+      return;
+    }
+
+    await this.drizzle.db
+      .update(events)
+      .set({ status: 'processing', fanOut: passing.length })
+      .where(eq(events.id, eventId));
+
     const created = await this.drizzle.db
       .insert(deliveries)
       .values(
-        targetRows.map((t) => ({
+        passing.map((t) => ({
           eventId: event.id,
           targetId: t.id,
           status: 'pending' as const,
