@@ -1,12 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 
+export type SigningFormat = 'wg' | 'stripe';
+
 export interface DeliverRequest {
   url: string;
   body: Buffer;
   headers: Record<string, string>;
   timeoutMs: number;
   signingSecret: string | null;
+  /** Outbound signature format. Defaults to `'wg'`. */
+  signingFormat?: SigningFormat;
 }
 
 export interface DeliverResult {
@@ -36,7 +40,14 @@ export class DeliveryClient {
         .update(`${ts}.`)
         .update(req.body)
         .digest('hex');
-      headers['x-wg-signature'] = `v1,t=${ts},s=${sig}`;
+      if ((req.signingFormat ?? 'wg') === 'stripe') {
+        // Stripe-compatible: `Stripe-Signature: t=<ts>,v1=<hex>` — downstream
+        // services can verify with the standard Stripe SDK by passing this
+        // header and the raw request body.
+        headers['stripe-signature'] = `t=${ts},v1=${sig}`;
+      } else {
+        headers['x-wg-signature'] = `v1,t=${ts},s=${sig}`;
+      }
     }
 
     const controller = new AbortController();

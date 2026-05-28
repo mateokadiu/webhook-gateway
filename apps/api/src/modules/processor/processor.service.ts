@@ -161,9 +161,9 @@ export class ProcessorService {
       return { requeueDelayMs: null };
     }
 
-    // Look up route for transform. Missing route ⇒ defaults.
+    // Look up route for transform + signing-format. Missing route ⇒ defaults.
     const routeRow = await this.drizzle.db
-      .select({ transform: routes.transform })
+      .select({ transform: routes.transform, signingFormat: routes.signingFormat })
       .from(routes)
       .where(and(eq(routes.sourceId, sourceId), eq(routes.targetId, target.id)))
       .limit(1);
@@ -191,6 +191,7 @@ export class ProcessorService {
       },
       timeoutMs: target.timeoutMs,
       signingSecret: target.signingSecret,
+      signingFormat: (route?.signingFormat as 'wg' | 'stripe' | undefined) ?? 'wg',
     });
 
     const attempt = delivery.attempt + 1;
