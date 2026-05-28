@@ -6,6 +6,7 @@ import { deliveries, events, routes, sources, targets } from '../../drizzle/sche
 import { EVENTS_QUEUE, REDIS_OPTIONS } from '../../common/queue/queue.module.js';
 import { DeliveryClient } from './delivery.client.js';
 import { dispatch } from '../routes/select.js';
+import { applyTransform } from '../routes/transform.js';
 
 export const DELIVERIES_QUEUE_NAME = 'deliveries';
 
@@ -141,6 +142,7 @@ export class ProcessorService {
         delivery: deliveries,
         target: targets,
         body: events.body,
+        sourceId: events.sourceId,
         contentType: sql<string>`${events.headers}->>'content-type'`,
       })
       .from(deliveries)
@@ -153,15 +155,36 @@ export class ProcessorService {
       this.log.warn({ deliveryId }, 'processDelivery: delivery missing');
       return { requeueDelayMs: null };
     }
-    const { delivery, target, body, contentType } = row;
+    const { delivery, target, body, sourceId, contentType } = row;
     if (delivery.status !== 'pending' && delivery.status !== 'retrying') {
       this.log.debug({ deliveryId, status: delivery.status }, 'processDelivery: skip terminal');
       return { requeueDelayMs: null };
     }
 
+    // Look up route for transform. Missing route ⇒ defaults.
+    const routeRow = await this.drizzle.db
+      .select({ transform: routes.transform })
+      .from(routes)
+      .where(and(eq(routes.sourceId, sourceId), eq(routes.targetId, target.id)))
+      .limit(1);
+    const route = routeRow[0];
+
+    let outboundBody = body;
+    if (route?.transform) {
+      const transformed = await applyTransform(route.transform, body);
+      if (transformed.ok) {
+        outboundBody = transformed.body;
+      } else {
+        this.log.warn(
+          { deliveryId, reason: transformed.reason, message: transformed.message },
+          'processDelivery: transform failed, sending original body',
+        );
+      }
+    }
+
     const result = await this.client.post({
       url: target.url,
-      body,
+      body: outboundBody,
       headers: {
         'content-type': contentType ?? 'application/json',
         ...(target.headers as Record<string, string>),
