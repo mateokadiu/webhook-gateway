@@ -115,6 +115,16 @@ export const api = {
     get: (id: string) => request<EventDetail>(`/api/events/${id}`),
     replay: (id: string) =>
       request<{ ok: true; eventId: string }>(`/api/events/${id}/replay`, { method: 'POST' }),
+    bulkReplay: (ids: string[]) =>
+      request<{ ok: true; replayed: string[]; notFound: string[] }>('/api/events/bulk/replay', {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      }),
+    bulkTombstone: (ids: string[]) =>
+      request<{ ok: true; tombstoned: string[]; notFound: string[] }>(
+        '/api/events/bulk/tombstone',
+        { method: 'POST', body: JSON.stringify({ ids }) },
+      ),
   },
   deliveries: {
     list: (q: { event_id?: string; status?: string; limit?: number } = {}) => {
