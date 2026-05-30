@@ -1,6 +1,6 @@
 {
   "name": "@webhook-gateway/plugin-stripe",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Stripe signature verifier plugin for webhook-gateway. Verifies Stripe-Signature (t=…,v1=…) with HMAC SHA-256 + tolerance.",
   "license": "MIT",
   "author": "Mateo Kadiu",

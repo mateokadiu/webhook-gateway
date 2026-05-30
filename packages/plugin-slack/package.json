@@ -1,6 +1,6 @@
 {
   "name": "@webhook-gateway/plugin-slack",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Slack signature verifier plugin for webhook-gateway. Validates X-Slack-Signature with X-Slack-Request-Timestamp.",
   "license": "MIT",
   "author": "Mateo Kadiu",

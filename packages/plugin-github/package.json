@@ -1,6 +1,6 @@
 {
   "name": "@webhook-gateway/plugin-github",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "GitHub webhook signature verifier plugin for webhook-gateway. Validates X-Hub-Signature-256.",
   "license": "MIT",
   "author": "Mateo Kadiu",

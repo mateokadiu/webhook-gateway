@@ -1,6 +1,6 @@
 {
   "name": "@webhook-gateway/plugin-shopify",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Shopify signature verifier plugin for webhook-gateway. Validates X-Shopify-Hmac-Sha256 (base64).",
   "license": "MIT",
   "author": "Mateo Kadiu",

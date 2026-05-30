@@ -1,7 +1,7 @@
 {
   "name": "webhook-gateway",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Self-hosted webhook reliability gateway: verify, persist, fan out, retry, replay.",
   "license": "MIT",
   "author": "Mateo Kadiu",

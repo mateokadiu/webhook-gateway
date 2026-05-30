@@ -1,6 +1,6 @@
 {
   "name": "@webhook-gateway/plugin-hmac",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Generic HMAC SHA-256 signature verifier plugin for webhook-gateway. Catch-all for sources without a dedicated plugin.",
   "license": "MIT",
   "author": "Mateo Kadiu",
