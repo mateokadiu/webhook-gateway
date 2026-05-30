@@ -1,6 +1,6 @@
 # webhook-gateway
 
-Self-hosted, MIT-licensed webhook reliability gateway. Verify signatures, persist to Postgres, fan out to your services, retry with exponential backoff, replay from a UI.
+Self-hosted, MIT-licensed webhook reliability gateway. Verify signatures, persist to Postgres, fan out to your services, route + filter + transform per pair, search the firehose, bulk-replay or tombstone — all from an admin UI.
 
 Same shape as Hookdeck / Svix Cloud — minus the price tag and the third party. TypeScript-native, Docker-Compose to start, Pulumi to scale.
 
@@ -15,7 +15,7 @@ external sender  ──HTTPS──▶  /in/:source   ──BullMQ──▶   ┌
 
 ## Status
 
-Phases 0-7 shipped. Live ingress, fan-out, plugins, admin UI, stats, Pulumi deploy. v0.1 ready.
+**v1.0** — production-ready. Ingress, fan-out, plugins, admin UI, stats, Pulumi deploy, per-pair routing + filtering, JSONata transforms, Stripe-format outbound signing, Postgres FTS search over events, bulk replay / tombstone.
 
 ## Two-minute quick start
 
@@ -135,13 +135,71 @@ The api dynamic-imports each listed package on boot and registers by `id`. Sourc
 
 ## Outbound signing
 
-When you set a `signing_secret` on a target, the gateway signs every outbound POST as:
+When you set a `signing_secret` on a target, the gateway signs every outbound POST. Two formats are available per route:
+
+**`wg`** (default):
 
 ```
 X-WG-Signature: v1,t=<unix-ts>,s=<hex-sha256-of-(t.body)>
 ```
 
-Your downstream service verifies with the same secret, gets a clean idempotency story (timestamps + body hash). The format is borrowed from Stripe — the verification helper is two lines of code on the consumer side.
+**`stripe`** — emits the exact header shape Stripe ships, so your downstream can verify with the standard Stripe SDK (`stripe.webhooks.constructEvent(rawBody, header, secret)`):
+
+```
+Stripe-Signature: t=<unix-ts>,v1=<hex-sha256-of-(t.body)>
+```
+
+Set `signing_format: 'stripe'` on the route to opt in. Default is `wg`.
+
+## Routing, filtering, transforms
+
+Each (source, target) pair has a **route** with three optional knobs:
+
+**1. Filter rules** — a tiny declarative DSL persisted as JSONB:
+
+```json
+{
+  "where": {
+    "topic":           { "in": ["invoice.paid", "invoice.failed"] },
+    "body.amount":     { "gte": 1000 },
+    "headers.x-source":{ "eq": "stripe-prod" }
+  },
+  "drop": false
+}
+```
+
+Operators: `eq`, `neq`, `in`, `nin`, `gt`, `gte`, `lt`, `lte`, `contains`, `regex`, `exists`. Paths: `topic`, `headers.<name>` (case-insensitive), `body.<dot.path>` (JSON-parsed body). All clauses are AND'd. Missing route ⇒ forward everything.
+
+**2. Transform** — optional [JSONata](https://jsonata.org) expression evaluated against the JSON-parsed body before delivery. Example:
+
+```
+{ "kind": data.object.type, "amount_cents": data.object.amount }
+```
+
+Transform failures (bad JSON, bad expression, undefined result) log a warning and fall back to the original body — they never drop the event.
+
+**3. Signing format** — `wg` or `stripe` (see above).
+
+## Event search
+
+Postgres full-text search across `topic`, `dedup_key`, and the UTF-8 body. The `events.tsv` tsvector is maintained by trigger and indexed with GIN, so queries stay fast even at millions of rows.
+
+```
+GET /api/events?q=invoice%20paid
+GET /api/events?q=cus_*           # prefix match
+GET /api/events?q=invoice%20-draft   # negation
+```
+
+The admin UI's `/events` page wires this to a search box.
+
+## Bulk operations
+
+The admin UI's `/events` page supports multi-select with two bulk actions:
+
+- **Bulk replay** — re-enqueue every selected event for fan-out. Existing deliveries are kept for history.
+- **Bulk tombstone** — mark events as consciously dropped (audit trail kept, no further processing).
+
+Backed by `POST /api/events/bulk/replay` and `POST /api/events/bulk/tombstone`, both accepting `{ "ids": ["<uuid>", ...] }` (max 500 ids per call).
 
 ## Stats
 
@@ -174,7 +232,7 @@ Differentiator: TypeScript-native plugin model + actually $0 self-hosted.
 
 ## Status
 
-Phase 7 of the v0.1 roadmap shipped. See [PLAN.md §10](./PLAN.md) for what's coming in v0.2 (filter rules engine, transformation, multi-tenant ops).
+v1.0 shipped. Multi-tenant SaaS, event sourcing, and compliance certifications remain out of scope by design — see [PLAN.md §12](./PLAN.md).
 
 ## Contributing
 
