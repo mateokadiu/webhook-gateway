@@ -1,6 +1,11 @@
 # webhook-gateway
 
-Self-hosted, MIT-licensed webhook reliability gateway. Verify signatures, persist to Postgres, fan out to your services, route + filter + transform per pair, search the firehose, bulk-replay or tombstone — all from an admin UI.
+> Self-hosted, MIT-licensed webhook reliability gateway. Verify signatures, persist to Postgres, fan out to your services, route + filter + transform per pair, search the firehose, bulk-replay or tombstone — all from an admin UI.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Status](https://img.shields.io/badge/status-v1.0-brightgreen)](#status)
+[![Stack](https://img.shields.io/badge/stack-NestJS%20%2B%20Next.js%2015-000)](#architecture)
+[![Deploy](https://img.shields.io/badge/deploy-%240%2Fmo-success)](#deploy-0month)
 
 Same shape as Hookdeck / Svix Cloud — minus the price tag and the third party. TypeScript-native, Docker-Compose to start, Pulumi to scale.
 
@@ -12,6 +17,23 @@ external sender  ──HTTPS──▶  /in/:source   ──BullMQ──▶   ┌
                        (Stripe / GitHub /                      │
                         Slack / Shopify / HMAC)        per-target retry policy
 ```
+
+## Contents
+
+- [Status](#status)
+- [Two-minute quick start](#two-minute-quick-start)
+- [Receive Stripe events end-to-end](#end-to-end-receive-stripe-events-fan-out-to-your-services)
+- [Architecture](#architecture)
+- [First-party plugins](#first-party-plugins)
+- [Writing a plugin](#writing-a-plugin)
+- [Outbound signing](#outbound-signing)
+- [Routing, filtering, transforms](#routing-filtering-transforms)
+- [Event search](#event-search)
+- [Bulk operations](#bulk-operations)
+- [Stats](#stats)
+- [Deploy ($0/month)](#deploy-0month)
+- [Comparisons](#comparisons)
+- [Out of scope](#out-of-scope-by-design)
 
 ## Status
 
@@ -72,6 +94,20 @@ https://hooks.your-domain.com/in/stripe-prod
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    S[external senders<br/>Stripe / GitHub / Slack / Shopify] -->|HTTPS POST /in/:source| API[NestJS 11 + Fastify<br/>raw-body HMAC verify]
+    API --> PG[(Postgres 16<br/>events + deliveries<br/>JSONB headers, BYTEA bodies)]
+    API --> Q1[BullMQ queue: events]
+    Q1 --> W[processor<br/>same Node, WORKER_MODE]
+    W --> Q2[BullMQ queue: deliveries]
+    Q2 --> T1[Target A]
+    Q2 --> T2[Target B]
+    Q2 --> T3[Target C]
+    T1 -.retry w/ backoff.-> Q2
+    UI[Next.js 15 admin UI<br/>React 19 + Tailwind v4] -->|/api/*| API
+```
+
 | Layer | Tech |
 |---|---|
 | api | NestJS 11 + Fastify (raw-body for HMAC verify) |
@@ -84,7 +120,34 @@ https://hooks.your-domain.com/in/stripe-prod
 
 Two BullMQ queues: `events` (one job per inbound event, fans out to deliveries) and `deliveries` (one job per `(event, target)` attempt). Failures re-enqueue with explicit delay from `targets.backoff_schedule`. Status rolls up on the parent event once all deliveries terminal.
 
-See [`PLAN.md`](./PLAN.md) for the full schema, signal flows, and decisions log.
+<details>
+<summary><b>Database schema</b> — events / deliveries / targets / sources</summary>
+
+```
+sources           targets            routes (source × target)
+  id PK             id PK              id PK
+  slug UNIQUE       label              source_id FK
+  label             url                target_id FK
+  plugin_id         signing_secret     filter_rules JSONB
+  signing_secret    backoff_schedule   transform_jsonata
+                                       signing_format ('wg' | 'stripe')
+
+events                                 deliveries
+  id PK                                  id PK
+  source_id FK                           event_id FK
+  topic                                  target_id FK
+  dedup_key UNIQUE(source, key)          attempt_no
+  body BYTEA                             status (pending / ok / retrying / dead / tombstoned)
+  headers JSONB                          last_error
+  tsv tsvector (GIN, generated)          next_attempt_at
+  received_at                            response_code, response_ms
+  status (received / fanout / done /
+          partially-failed / dead)
+```
+
+`events.tsv` is maintained by trigger over `topic || dedup_key || body::text` and indexed with GIN — search stays sub-100ms at millions of rows.
+
+</details>
 
 ## First-party plugins
 
@@ -135,6 +198,9 @@ The api dynamic-imports each listed package on boot and registers by `id`. Sourc
 
 ## Outbound signing
 
+<details>
+<summary><b>Two formats: <code>wg</code> (default) and <code>stripe</code></b> — verify with the stock Stripe SDK on the receiving side</summary>
+
 When you set a `signing_secret` on a target, the gateway signs every outbound POST. Two formats are available per route:
 
 **`wg`** (default):
@@ -151,11 +217,14 @@ Stripe-Signature: t=<unix-ts>,v1=<hex-sha256-of-(t.body)>
 
 Set `signing_format: 'stripe'` on the route to opt in. Default is `wg`.
 
+</details>
+
 ## Routing, filtering, transforms
 
-Each (source, target) pair has a **route** with three optional knobs:
+<details>
+<summary><b>Filter rules</b> — declarative DSL over topic / headers / body</summary>
 
-**1. Filter rules** — a tiny declarative DSL persisted as JSONB:
+Each (source, target) pair has a **route** with three optional knobs. The filter is a tiny declarative DSL persisted as JSONB:
 
 ```json
 {
@@ -170,7 +239,12 @@ Each (source, target) pair has a **route** with three optional knobs:
 
 Operators: `eq`, `neq`, `in`, `nin`, `gt`, `gte`, `lt`, `lte`, `contains`, `regex`, `exists`. Paths: `topic`, `headers.<name>` (case-insensitive), `body.<dot.path>` (JSON-parsed body). All clauses are AND'd. Missing route ⇒ forward everything.
 
-**2. Transform** — optional [JSONata](https://jsonata.org) expression evaluated against the JSON-parsed body before delivery. Example:
+</details>
+
+<details>
+<summary><b>JSONata transforms</b> — reshape the body before delivery</summary>
+
+Optional [JSONata](https://jsonata.org) expression evaluated against the JSON-parsed body before delivery. Example:
 
 ```
 { "kind": data.object.type, "amount_cents": data.object.amount }
@@ -178,7 +252,7 @@ Operators: `eq`, `neq`, `in`, `nin`, `gt`, `gte`, `lt`, `lte`, `contains`, `rege
 
 Transform failures (bad JSON, bad expression, undefined result) log a warning and fall back to the original body — they never drop the event.
 
-**3. Signing format** — `wg` or `stripe` (see above).
+</details>
 
 ## Event search
 
@@ -216,7 +290,21 @@ Two options, both genuinely free:
 - **Local Mac / VM**: `pnpm compose:up` + a launchd plist or systemd unit. Works fine for personal use.
 - **Oracle Cloud Always Free**: ARM A1.Flex (4 OCPU / 24 GB, forever free). `ops/pulumi/` has the IaC. Public ingress via Cloudflare Tunnel.
 
-See `ops/pulumi/README.md` for the cloud path.
+<details>
+<summary><b>Cloud deploy</b> — Pulumi recipe for Oracle Always Free</summary>
+
+`ops/pulumi/` provisions an ARM A1.Flex compute, the VCN + ingress + egress security lists, and a Cloudflare Tunnel for public ingress (no public IP, no inbound port forwarding). Docker Compose runs on the host; secrets live in Pulumi config. Postgres and Redis are sibling containers — no managed service spend.
+
+```bash
+cd ops/pulumi
+pulumi stack init prod
+pulumi config set --secret admin-bearer "$(openssl rand -hex 32)"
+pulumi up
+```
+
+The `cloud-init` userdata pulls the latest image on first boot and runs migrations.
+
+</details>
 
 ## Comparisons
 
@@ -230,9 +318,12 @@ See `ops/pulumi/README.md` for the cloud path.
 
 Differentiator: TypeScript-native plugin model + actually $0 self-hosted.
 
-## Status
+## Out of scope (by design)
 
-v1.0 shipped. Multi-tenant SaaS, event sourcing, and compliance certifications remain out of scope by design — see [PLAN.md §12](./PLAN.md).
+- [x] v1.0 shipped
+- [ ] Multi-tenant SaaS — not planned. Self-host one instance per tenant.
+- [ ] Event sourcing / replay-from-any-point — the DB is the log; replay starts from there.
+- [ ] Compliance certifications (SOC2 etc.) — self-host means it's the operator's responsibility.
 
 ## Contributing
 
@@ -247,4 +338,4 @@ PRs welcome. Plugin contributions especially welcome — open an issue first so 
 
 ## License
 
-MIT.
+MIT · [@mateokadiu](https://github.com/mateokadiu)
