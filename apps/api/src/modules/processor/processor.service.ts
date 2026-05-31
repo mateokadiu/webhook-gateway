@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Queue, type ConnectionOptions } from 'bullmq';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../common/drizzle/drizzle.service.js';
 import { deliveries, events, routes, sources, targets } from '../../drizzle/schema.js';
 import { EVENTS_QUEUE, REDIS_OPTIONS } from '../../common/queue/queue.module.js';
@@ -75,15 +75,13 @@ export class ProcessorService {
     const targetRows = await this.drizzle.db
       .select()
       .from(targets)
-      .where(sql`${targets.id} = ANY(${targetIds}::uuid[]) AND ${targets.enabled} = true`);
+      .where(and(inArray(targets.id, targetIds), eq(targets.enabled, true)));
 
     // Look up per-pair routes. Missing route ⇒ default (no filter, no transform).
     const routeRows = await this.drizzle.db
       .select()
       .from(routes)
-      .where(
-        sql`${routes.sourceId} = ${event.sourceId} AND ${routes.targetId} = ANY(${targetIds}::uuid[])`,
-      );
+      .where(and(eq(routes.sourceId, event.sourceId), inArray(routes.targetId, targetIds)));
 
     // Apply per-route filter rules.
     const decisions = dispatch(

@@ -48,7 +48,8 @@ export class ProcessorWorker implements OnModuleInit, OnModuleDestroy {
           await this.processor.getDeliveriesQueue().add(
             'deliver',
             { deliveryId },
-            { delay: requeueDelayMs, jobId: `${deliveryId}:${Date.now()}` },
+            // BullMQ rejects ':' in job ids — use '-' as the attempt separator.
+            { delay: requeueDelayMs, jobId: `${deliveryId}-${Date.now()}` },
           );
         }
       },

@@ -25,7 +25,7 @@ export class DeliveriesService {
       .where(eq(deliveries.id, id));
     await this.processor
       .getDeliveriesQueue()
-      .add('deliver', { deliveryId: id }, { jobId: `retry:${id}:${Date.now()}` });
+      .add('deliver', { deliveryId: id }, { jobId: `retry-${id}-${Date.now()}` });
     return { ok: true };
   }
 

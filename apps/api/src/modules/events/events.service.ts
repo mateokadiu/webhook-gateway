@@ -25,7 +25,7 @@ export class EventsService {
       .update(events)
       .set({ status: 'queued', fanOut: 0, fanOutOk: 0, fanOutFailed: 0, completedAt: null })
       .where(eq(events.id, id));
-    await this.queue.add('process', { eventId: id }, { jobId: `replay:${id}:${Date.now()}` });
+    await this.queue.add('process', { eventId: id }, { jobId: `replay-${id}-${Date.now()}` });
     return { ok: true, eventId: id };
   }
 
@@ -62,7 +62,7 @@ export class EventsService {
       const stamp = Date.now();
       await Promise.all(
         replayed.map((id) =>
-          this.queue.add('process', { eventId: id }, { jobId: `replay:${id}:${stamp}` }),
+          this.queue.add('process', { eventId: id }, { jobId: `replay-${id}-${stamp}` }),
         ),
       );
     }

@@ -39,7 +39,8 @@ export class StatsService {
   constructor(private readonly drizzle: DrizzleService) {}
 
   async overview({ hours }: { hours: number }): Promise<Overview> {
-    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    // postgres-js bind expects a string, not a Date — coerce to ISO upfront.
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
     const evRow = await this.drizzle.db.execute<{
       total: string;
