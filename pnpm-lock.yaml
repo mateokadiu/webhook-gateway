@@ -161,6 +161,22 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/plugin-github:
+    dependencies:
+      '@webhook-gateway/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/plugin-hmac:
     dependencies:
       '@webhook-gateway/plugin-sdk':
@@ -185,6 +201,54 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+
+  packages/plugin-shopify:
+    dependencies:
+      '@webhook-gateway/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)(terser@5.48.0)
+
+  packages/plugin-slack:
+    dependencies:
+      '@webhook-gateway/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)(terser@5.48.0)
+
+  packages/plugin-stripe:
+    dependencies:
+      '@webhook-gateway/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(lightningcss@1.32.0)(terser@5.48.0)
 
   packages/shared:
     dependencies:
