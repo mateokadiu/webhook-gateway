@@ -1,11 +1,33 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
+import type { Queue } from 'bullmq';
 import { DrizzleService } from '../../common/drizzle/drizzle.service.js';
 import { deliveries } from '../../drizzle/schema.js';
+import { ProcessorService } from '../processor/processor.service.js';
 
 @Injectable()
 export class DeliveriesService {
-  constructor(private readonly drizzle: DrizzleService) {}
+  constructor(
+    private readonly drizzle: DrizzleService,
+    private readonly processor: ProcessorService,
+  ) {}
+
+  async retry(id: string): Promise<{ ok: true }> {
+    const rows = await this.drizzle.db
+      .select({ id: deliveries.id })
+      .from(deliveries)
+      .where(eq(deliveries.id, id))
+      .limit(1);
+    if (!rows[0]) throw new NotFoundException(`delivery ${id} not found`);
+    await this.drizzle.db
+      .update(deliveries)
+      .set({ status: 'retrying', nextAttemptAt: new Date() })
+      .where(eq(deliveries.id, id));
+    await this.processor
+      .getDeliveriesQueue()
+      .add('deliver', { deliveryId: id }, { jobId: `retry:${id}:${Date.now()}` });
+    return { ok: true };
+  }
 
   list(opts: {
     eventId?: string | undefined;

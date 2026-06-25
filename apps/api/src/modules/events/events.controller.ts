@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, NotFoundException, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { BearerGuard } from '../../common/auth/bearer.guard.js';
 import { EventsService } from './events.service.js';
 
@@ -25,5 +25,11 @@ export class EventsController {
     const row = await this.service.findById(id);
     if (!row) throw new NotFoundException();
     return row;
+  }
+
+  @Post(':id/replay')
+  @HttpCode(200)
+  async replay(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.service.replay(id);
   }
 }

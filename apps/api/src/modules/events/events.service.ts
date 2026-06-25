@@ -1,11 +1,32 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
+import type { Queue } from 'bullmq';
 import { DrizzleService } from '../../common/drizzle/drizzle.service.js';
 import { events } from '../../drizzle/schema.js';
+import { EVENTS_QUEUE } from '../../common/queue/queue.module.js';
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly drizzle: DrizzleService) {}
+  constructor(
+    private readonly drizzle: DrizzleService,
+    @Inject(EVENTS_QUEUE) private readonly queue: Queue,
+  ) {}
+
+  async replay(id: string): Promise<{ ok: true; eventId: string }> {
+    const rows = await this.drizzle.db
+      .select({ id: events.id })
+      .from(events)
+      .where(eq(events.id, id))
+      .limit(1);
+    if (!rows[0]) throw new NotFoundException(`event ${id} not found`);
+
+    await this.drizzle.db
+      .update(events)
+      .set({ status: 'queued', fanOut: 0, fanOutOk: 0, fanOutFailed: 0, completedAt: null })
+      .where(eq(events.id, id));
+    await this.queue.add('process', { eventId: id }, { jobId: `replay:${id}:${Date.now()}` });
+    return { ok: true, eventId: id };
+  }
 
   async list(opts: { sourceId?: string | undefined; status?: string | undefined; limit: number }) {
     const filters = [];
