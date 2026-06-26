@@ -12,6 +12,7 @@ import { TargetsModule } from './modules/targets/targets.module.js';
 import { EventsModule } from './modules/events/events.module.js';
 import { DeliveriesModule } from './modules/deliveries/deliveries.module.js';
 import { ProcessorModule } from './modules/processor/processor.module.js';
+import { StatsModule } from './modules/stats/stats.module.js';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ProcessorModule } from './modules/processor/processor.module.js';
     EventsModule,
     DeliveriesModule,
     ProcessorModule,
+    StatsModule,
   ],
 })
 export class AppModule {}
