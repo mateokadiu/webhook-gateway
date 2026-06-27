@@ -1,0 +1,5 @@
+node_modules
+Pulumi.*.yaml
+!Pulumi.yaml
+bin
+.pulumi

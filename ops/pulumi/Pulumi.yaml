@@ -1,0 +1,36 @@
+name: webhook-gateway-infra
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+description: |
+  Provisions an Oracle Cloud Always-Free Ampere A1 ARM VM (4 OCPUs / 24GB RAM,
+  forever free) running the webhook-gateway compose stack. cloud-init installs
+  Tailscale + Docker Compose, clones the repo, runs the stack under systemd.
+  The VM joins the user's tailnet — admin UI is exposed via Tailscale, ingress
+  goes through a Cloudflare Tunnel (or whatever the operator wires up).
+config:
+  webhook-gateway-infra:tenancyOcid:
+    description: OCI tenancy OCID
+  webhook-gateway-infra:userOcid:
+    description: OCI user OCID
+  webhook-gateway-infra:compartmentOcid:
+    description: Compartment to deploy into (tenancy root is fine)
+  webhook-gateway-infra:region:
+    description: OCI region (e.g. eu-frankfurt-1, us-ashburn-1)
+    default: eu-frankfurt-1
+  webhook-gateway-infra:availabilityDomain:
+    description: AD name, e.g. tQjF:EU-FRANKFURT-1-AD-1
+  webhook-gateway-infra:sshAuthorizedKey:
+    description: Public SSH key authorized on the VM
+  webhook-gateway-infra:tailscaleAuthKey:
+    description: Tailscale ephemeral auth key
+    secret: true
+  webhook-gateway-infra:repoUrl:
+    description: Git URL of this repo
+  webhook-gateway-infra:adminBearer:
+    description: Bearer token the admin UI sends to the api (openssl rand -hex 32)
+    secret: true
+  webhook-gateway-infra:plugins:
+    description: Comma-separated plugin packages to load (e.g. "@webhook-gateway/plugin-stripe,@webhook-gateway/plugin-github")
+    default: "@webhook-gateway/plugin-hmac"
