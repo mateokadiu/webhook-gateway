@@ -22,6 +22,12 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 });
 
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
+
 export const sources = pgTable('sources', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   slug: text('slug').notNull().unique(),
@@ -73,6 +79,7 @@ export const events = pgTable(
     fanOutFailed: integer('fan_out_failed').notNull().default(0),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp('completed_at', { withTimezone: true }),
+    tsv: tsvector('tsv'),
   },
   (t) => ({
     sourceDedupUnique: unique('events_source_dedup_unique').on(t.sourceId, t.dedupKey),
@@ -82,6 +89,7 @@ export const events = pgTable(
     ),
     receivedIdx: index('events_received_idx').on(t.receivedAt),
     sourceStatusIdx: index('events_source_status_idx').on(t.sourceId, t.status, t.receivedAt),
+    tsvIdx: index('events_tsv_idx').using('gin', t.tsv),
   }),
 );
 
