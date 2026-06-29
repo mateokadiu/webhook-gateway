@@ -1,9 +1,10 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Queue } from 'bullmq';
 import { DrizzleService } from '../../common/drizzle/drizzle.service.js';
 import { events } from '../../drizzle/schema.js';
 import { EVENTS_QUEUE } from '../../common/queue/queue.module.js';
+import { toTsQuery } from './fts.js';
 
 @Injectable()
 export class EventsService {
@@ -28,10 +29,19 @@ export class EventsService {
     return { ok: true, eventId: id };
   }
 
-  async list(opts: { sourceId?: string | undefined; status?: string | undefined; limit: number }) {
+  async list(opts: {
+    sourceId?: string | undefined;
+    status?: string | undefined;
+    q?: string | undefined;
+    limit: number;
+  }) {
     const filters = [];
     if (opts.sourceId) filters.push(eq(events.sourceId, opts.sourceId));
     if (opts.status) filters.push(eq(events.status, opts.status));
+    if (opts.q && opts.q.trim().length > 0) {
+      const tsq = toTsQuery(opts.q);
+      filters.push(sql`${events.tsv} @@ to_tsquery('simple', ${tsq})`);
+    }
 
     return this.drizzle.db
       .select({

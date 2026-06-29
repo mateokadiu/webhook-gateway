@@ -11,11 +11,13 @@ export class EventsController {
   list(
     @Query('source_id') sourceId?: string,
     @Query('status') status?: string,
+    @Query('q') q?: string,
     @Query('limit') limit?: string,
   ) {
     return this.service.list({
       sourceId,
       status,
+      q,
       limit: Math.min(500, Number(limit) || 100),
     });
   }
