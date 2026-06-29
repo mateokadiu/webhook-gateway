@@ -16,9 +16,16 @@ const STATUS_STYLES: Record<EventRow['status'], string> = {
 
 export default function EventsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [searchInput, setSearchInput] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const { data, error, isLoading } = useQuery({
-    queryKey: ['events', statusFilter],
-    queryFn: () => api.events.list({ status: statusFilter || undefined, limit: 200 }),
+    queryKey: ['events', statusFilter, searchTerm],
+    queryFn: () =>
+      api.events.list({
+        status: statusFilter || undefined,
+        q: searchTerm || undefined,
+        limit: 200,
+      }),
     refetchInterval: 5_000,
   });
 
@@ -42,6 +49,39 @@ export default function EventsPage() {
             </option>
           ))}
         </select>
+        <form
+          className="flex flex-1 items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSearchTerm(searchInput.trim());
+          }}
+        >
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="search topic / dedup / body…"
+            className="w-full rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-3 py-2 text-sm"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput('');
+                setSearchTerm('');
+              }}
+              className="rounded-md border border-[color:var(--color-border)] px-3 py-2 text-xs text-[color:var(--color-muted-foreground)] hover:bg-[color:var(--color-card)]"
+            >
+              clear
+            </button>
+          )}
+          <button
+            type="submit"
+            className="rounded-md border border-[color:var(--color-border)] bg-[color:var(--color-card)] px-3 py-2 text-xs hover:bg-[color:var(--color-muted)]"
+          >
+            search
+          </button>
+        </form>
       </div>
 
       {isLoading && <p className="mt-8 text-sm">Loading…</p>}
@@ -89,7 +129,9 @@ export default function EventsPage() {
                   colSpan={6}
                   className="px-4 py-8 text-center text-sm text-[color:var(--color-muted-foreground)]"
                 >
-                  No events {statusFilter ? `with status=${statusFilter}` : 'yet'}.
+                  No events
+                  {searchTerm ? ` matching "${searchTerm}"` : ''}
+                  {statusFilter ? ` with status=${statusFilter}` : !searchTerm ? ' yet' : ''}.
                 </td>
               </tr>
             )}

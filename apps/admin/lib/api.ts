@@ -104,10 +104,11 @@ export const api = {
       request<{ ok: true }>(`/api/targets/${id}`, { method: 'DELETE' }),
   },
   events: {
-    list: (q: { source_id?: string; status?: string; limit?: number } = {}) => {
+    list: (q: { source_id?: string; status?: string; q?: string; limit?: number } = {}) => {
       const p = new URLSearchParams();
       if (q.source_id) p.set('source_id', q.source_id);
       if (q.status) p.set('status', q.status);
+      if (q.q) p.set('q', q.q);
       if (q.limit) p.set('limit', String(q.limit));
       return request<EventRow[]>(`/api/events${p.toString() ? `?${p}` : ''}`);
     },
