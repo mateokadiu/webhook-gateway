@@ -4,7 +4,7 @@ All notable changes to webhook-gateway are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions adhere to
 [Semantic Versioning](https://semver.org).
 
-## 1.0.0 — 2026-07-04
+## 1.0.0 — 2026-05-30
 
 First stable release. Everything in 0.1 plus the routing layer, event search,
 bulk ops, and Stripe-compatible outbound signing.
