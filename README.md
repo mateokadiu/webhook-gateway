@@ -9,6 +9,8 @@
 
 Same shape as Hookdeck / Svix Cloud — minus the price tag and the third party. TypeScript-native, Docker-Compose to start, Pulumi to scale.
 
+> **Two admins, one backend.** The bundled UI is Next.js 15 + React 19 (canonical). A standalone Angular 19 + signals + zoneless admin is published as a sibling repo: **[webhook-gateway-admin](https://github.com/mateokadiu/webhook-gateway-admin)** — same TanStack Query layer, same Zod schemas, same REST surface. Useful as an Angular reference, useful if you want the React UI off your fleet.
+
 ```
 external sender  ──HTTPS──▶  /in/:source   ──BullMQ──▶   ┌─ POST target A
                               ▲                          ├─ POST target B  ──retry w/ backoff──▶ ok / dead
@@ -114,7 +116,7 @@ flowchart LR
 | ORM | Drizzle (Postgres 16, JSONB headers, BYTEA bodies) |
 | queue | BullMQ + Redis 7, per-target backoff schedules |
 | processor | Same Node process as api; toggle off via `WORKER_MODE=off` |
-| admin | Next.js 15 + React 19 + Tailwind v4 + TanStack Query v5 |
+| admin | Next.js 15 + React 19 + Tailwind v4 + TanStack Query v5 — *also available as Angular 19 in [webhook-gateway-admin](https://github.com/mateokadiu/webhook-gateway-admin)* |
 | plugins | `@webhook-gateway/plugin-*` packages — one verifier each |
 | deploy | Docker Compose locally; Pulumi → Oracle Cloud Always Free ($0/mo) |
 
