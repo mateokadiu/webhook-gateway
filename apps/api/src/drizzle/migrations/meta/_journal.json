@@ -15,6 +15,13 @@
       "when": 1782681272000,
       "tag": "0001_events_tsvector",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782852171000,
+      "tag": "0002_routes",
+      "breakpoints": true
     }
   ]
 }

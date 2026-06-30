@@ -14,7 +14,7 @@ import {
   check,
   primaryKey,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
@@ -138,3 +138,64 @@ export const sourceStatsDaily = pgTable(
     pk: primaryKey({ columns: [t.sourceId, t.date] }),
   }),
 );
+
+/**
+ * Per (source, target) route. Optional filter rules + transform.
+ *   - `rules`     : DSL — `{ where?: {…}, drop?: boolean }`. Empty / missing means "match all".
+ *   - `transform` : optional JSONata expression evaluated against the JSON-parsed body
+ *                   before delivery. Empty / null means pass-through.
+ *   - `signingFormat`: `'wg'` (default) | `'stripe'`.
+ *   - `enabled`   : per-route kill switch.
+ */
+export const routes = pgTable(
+  'routes',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    sourceId: uuid('source_id')
+      .notNull()
+      .references(() => sources.id, { onDelete: 'cascade' }),
+    targetId: uuid('target_id')
+      .notNull()
+      .references(() => targets.id, { onDelete: 'cascade' }),
+    rules: jsonb('rules').notNull().default(sql`'{}'::jsonb`),
+    transform: text('transform'),
+    signingFormat: text('signing_format').notNull().default('wg'),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    sourceTargetUnique: unique('routes_source_target_unique').on(t.sourceId, t.targetId),
+    signingFormatCheck: check(
+      'routes_signing_format_check',
+      sql`${t.signingFormat} in ('wg','stripe')`,
+    ),
+    sourceIdx: index('routes_source_idx').on(t.sourceId),
+    targetIdx: index('routes_target_idx').on(t.targetId),
+  }),
+);
+
+export const sourcesRelations = relations(sources, ({ many }) => ({
+  events: many(events),
+  routes: many(routes),
+}));
+
+export const targetsRelations = relations(targets, ({ many }) => ({
+  deliveries: many(deliveries),
+  routes: many(routes),
+}));
+
+export const eventsRelations = relations(events, ({ one, many }) => ({
+  source: one(sources, { fields: [events.sourceId], references: [sources.id] }),
+  deliveries: many(deliveries),
+}));
+
+export const deliveriesRelations = relations(deliveries, ({ one }) => ({
+  event: one(events, { fields: [deliveries.eventId], references: [events.id] }),
+  target: one(targets, { fields: [deliveries.targetId], references: [targets.id] }),
+}));
+
+export const routesRelations = relations(routes, ({ one }) => ({
+  source: one(sources, { fields: [routes.sourceId], references: [sources.id] }),
+  target: one(targets, { fields: [routes.targetId], references: [targets.id] }),
+}));
